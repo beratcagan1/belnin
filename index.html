@@ -3,15 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Belbin Deep Guessing Game</title>
+  <title>Belbin Deep Guessing Game — Teams</title>
   <style>
-    :root{
-      --bg:#f8fafc; --panel:#ffffff; --ink:#0f172a; --muted:#475569; --line:#e2e8f0;
-      --accent:#111827; --good:#059669; --warn:#b45309; --bad:#b91c1c; --chip:#f1f5f9;
-    }
+    :root{ --bg:#f8fafc; --panel:#ffffff; --ink:#0f172a; --muted:#475569; --line:#e2e8f0; --accent:#111827; --good:#059669; --warn:#b45309; --bad:#b91c1c; --chip:#f1f5f9; }
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:linear-gradient(#fff,#f8fafc);color:var(--ink)}
-    .wrap{max-width:940px;margin:auto;padding:24px}
+    .wrap{max-width:1100px;margin:auto;padding:24px}
     h1{font-size:clamp(22px,3.5vw,30px);margin:0 0 4px}
     p.sub{margin:0;color:var(--muted);font-size:14px}
     .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
@@ -48,15 +45,23 @@
     .small{font-size:12px;color:var(--muted)}
     blockquote{margin:0;padding:10px 12px;border-left:4px solid #cbd5e1;background:#f8fafc;border-radius:8px}
     .footer{font-size:12px;color:var(--muted);text-align:center;margin-top:16px}
-    @media (max-width:520px){.opt{flex-direction:row}}
+    .grid-2{display:grid;grid-template-columns:1.4fr .8fr;gap:16px}
+    @media (max-width:900px){.grid-2{grid-template-columns:1fr}}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}
+    th{background:#f8fafc}
+    .pill{padding:3px 8px;border-radius:999px;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;font-size:12px}
+    input[type="text"]{padding:10px 12px;border:1px solid var(--line);border-radius:10px;width:100%}
+    .lobby{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:700px){.lobby{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
   <div class="wrap">
     <header class="row" style="justify-content:space-between">
       <div>
-        <h1>Belbin Deep Guessing Game</h1>
-        <p class="sub">Layered scenarios • immediate feedback • reasoning & cluster analysis</p>
+        <h1>Belbin Deep Guessing Game — Teams</h1>
+        <p class="sub">Groups enter a team name + session code • Shared live scoreboard</p>
       </div>
       <div class="row">
         <span class="badge" id="qCount">Questions: 0</span>
@@ -64,272 +69,346 @@
       </div>
     </header>
 
-    <section style="margin:14px 0">
-      <div class="row" style="justify-content:space-between;margin-bottom:6px">
-        <span class="small">Progress</span>
-        <span class="small" id="progressText">0/0</span>
-      </div>
-      <div class="progress"><div class="bar" id="progressBar"></div></div>
-    </section>
-
-    <div class="card" id="questionCard">
+    <!-- LOBBY -->
+    <div class="card" id="lobbyCard">
       <div class="card-head">
-        <div>
-          <h2 id="scenarioTitle">Scenario 1</h2>
-          <div class="kicker">Consider multiple dimensions (context, trade‑offs, team impact)</div>
-        </div>
-        <div class="row">
-          <span class="badge" id="clusterBadge">Cluster</span>
-          <button id="hintBtn" title="Toggle hint">💡 Hint</button>
-        </div>
+        <h2>Join or create a session</h2>
+        <span class="pill">Host tip: Share the Session Code so all teams join the same room.</span>
       </div>
       <div class="card-body">
-        <blockquote id="scenarioText"></blockquote>
-        <div id="hintBox" class="alert" style="display:none"></div>
-
-        <div class="options" id="options"></div>
-
+        <div class="lobby">
+          <div>
+            <label class="small">Session code (letters or numbers)</label>
+            <input id="sessionCode" type="text" placeholder="e.g., TEAM2025 or 482961" />
+          </div>
+          <div>
+            <label class="small">Team name</label>
+            <input id="teamName" type="text" placeholder="e.g., Falcon" />
+          </div>
+        </div>
         <div class="controls" style="margin-top:12px">
-          <button class="primary" id="submitBtn">✓ Submit guess</button>
-          <button id="prevBtn">← Prev</button>
-          <button id="nextBtn">Next →</button>
-          <button id="resetBtn">⟲ Reset</button>
+          <button class="primary" id="createBtn">Create session</button>
+          <button id="joinBtn">Join session</button>
+          <button id="randomBtn">Random code</button>
         </div>
-
-        <div id="feedback"></div>
+        <p class="small muted" style="margin-top:8px">All teams who use the same Session Code will see each other's points live.</p>
+        <div id="lobbyStatus" class="small" style="margin-top:8px"></div>
       </div>
     </div>
 
-    <div class="card" style="margin-top:14px">
-      <div class="card-head">
-        <div>
-          <h2>Results & Reasoning</h2>
-          <div class="kicker">Review performance by cluster and expand to see rationale per question</div>
-        </div>
-        <button id="toggleAll">Show all explanations</button>
-      </div>
-      <div class="card-body">
-        <div class="cluster-grid" id="clusterGrid"></div>
-        <div id="review"></div>
-        <div id="finalBox" style="display:none;margin-top:12px" class="result">
-          <div class="small">Final score</div>
-          <div style="font-size:24px;font-weight:700"><span id="finalScore">0.0</span> <span class="muted">/ <span id="finalTotal">0</span></span></div>
-          <p class="small">Full credit for exact matches; half credit for near‑miss roles with overlapping behaviours.</p>
-        </div>
-      </div>
-    </div>
+    <div class="grid-2" style="margin-top:16px">
 
-    <div class="footer">Tip: Each role lives in tension with others. Look for the <b>trade‑off</b> being paid to create value.</div>
+      <!-- QUIZ COLUMN -->
+      <div>
+        <section style="margin:14px 0">
+          <div class="row" style="justify-content:space-between;margin-bottom:6px">
+            <span class="small">Progress</span>
+            <span class="small" id="progressText">0/0</span>
+          </div>
+          <div class="progress"><div class="bar" id="progressBar"></div></div>
+        </section>
+
+        <div class="card" id="questionCard" style="display:none">
+          <div class="card-head">
+            <div>
+              <h2 id="scenarioTitle">Scenario 1</h2>
+              <div class="kicker">Consider multiple dimensions (context, trade‑offs, team impact)</div>
+              <div class="small" id="sessionDisplay"></div>
+            </div>
+            <div class="row">
+              <span class="badge" id="clusterBadge">Cluster</span>
+              <button id="hintBtn" title="Toggle hint">💡 Hint</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <blockquote id="scenarioText"></blockquote>
+            <div id="hintBox" class="alert" style="display:none"></div>
+
+            <div class="options" id="options"></div>
+
+            <div class="controls" style="margin-top:12px">
+              <button class="primary" id="submitBtn">✓ Submit guess</button>
+              <button id="prevBtn">← Prev</button>
+              <button id="nextBtn">Next →</button>
+              <button id="resetBtn">⟲ Reset (local)</button>
+            </div>
+
+            <div id="feedback"></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-head">
+            <div>
+              <h2>Results & Reasoning</h2>
+              <div class="kicker">Review performance by cluster and expand to see rationale per question</div>
+            </div>
+            <button id="toggleAll">Show all explanations</button>
+          </div>
+          <div class="card-body">
+            <div class="cluster-grid" id="clusterGrid"></div>
+            <div id="review"></div>
+            <div id="finalBox" style="display:none;margin-top:12px" class="result">
+              <div class="small">Final score</div>
+              <div style="font-size:24px;font-weight:700"><span id="finalScore">0.0</span> <span class="muted">/ <span id="finalTotal">0</span></span></div>
+              <p class="small">Full credit for exact matches; half credit for near‑miss roles with overlapping behaviours.</p>
+            </div>
+          </div>
+        </div>
+        <div class="footer">Tip: Each role lives in tension with others. Look for the <b>trade‑off</b> being paid to create value.</div>
+      </div>
+
+      <!-- SCOREBOARD COLUMN -->
+      <div>
+        <div class="card">
+          <div class="card-head">
+            <h2>Live Scoreboard</h2>
+            <span class="pill" id="sbSession">No session</span>
+          </div>
+          <div class="card-body">
+            <table id="scoreTable">
+              <thead>
+                <tr><th style="width:45%">Team</th><th>Score</th><th>Answered</th><th>Last update</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <p class="small muted" style="margin-top:8px">Scores update in real time as teams submit.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
   </div>
 
-<script>
-// -------- Data --------
-const ROLES = {
-  PL: { name: "Plant", cluster: "Thought", blurb: "Original, imaginative ideas; may overlook practicalities." },
-  RI: { name: "Resource Investigator", cluster: "People", blurb: "Explores opportunities and contacts; may lose interest later." },
-  CO: { name: "Coordinator", cluster: "People", blurb: "Clarifies goals, delegates well; can seem over-directive." },
-  SH: { name: "Shaper", cluster: "Action", blurb: "Drives momentum under pressure; may be provocative or impatient." },
-  ME: { name: "Monitor Evaluator", cluster: "Thought", blurb: "Sober, strategic judgement; can appear critical or detached." },
-  TW: { name: "Teamworker", cluster: "People", blurb: "Supports, listens, and harmonises; may avoid decisive stands." },
-  IMP:{ name: "Implementer", cluster: "Action", blurb: "Turns ideas into plans and systems; can be inflexible to late change." },
-  CF: { name: "Completer Finisher", cluster: "Action", blurb: "Polishes and perfects; may worry over details and pace." },
-  SP: { name: "Specialist", cluster: "Thought", blurb: "Provides rare expertise; narrow focus outside their niche." },
-};
-const ROLE_ORDER = ["PL","RI","CO","SH","ME","TW","IMP","CF","SP"];
+  <!-- Firebase (client-only) -->
+  <script type="module">
+    // === 1) Configure Firebase ===
+    // Create a Firebase project at https://console.firebase.google.com
+    // Add a Web App and copy its config here:
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      appId: "YOUR_APP_ID"
+    };
 
-const SCENARIOS = [
-  { id:"S1", text:"In the early stages of brainstorming, Devon is restless. They press the group to stop circling and commit to one direction. Their urgency creates momentum, but some teammates feel bulldozed. When questioned, Devon insists that progress is better than perfection.", role:"SH", alt:["CO","IMP"], reasons:["Pushes for pace and direction under ambiguity (classic Shaper driver).","Willingness to provoke and risk ruffling feathers to avoid drift.","Focus on momentum over polish is an action-bias hallmark."], dims:["time pressure","conflict tolerance","momentum vs perfection"], hint:"Notice the intolerance for dithering and appetite for friction." },
-  { id:"S2", text:"Morgan rarely dominates meetings but has a talent for distilling sprawling conversations into a clear set of options. They don’t push a personal agenda, yet people look to them to frame decisions. Occasionally they’re accused of being too hands-off, quietly steering rather than jumping in.", role:"CO", alt:["ME","TW"], reasons:["Clarifies goals and frames choices without hijacking content (Coordinator).","Delegative, agenda-light posture with social authority.","Perception of ‘steering’ speaks to orchestration rather than analysis alone."], dims:["sense-making","delegation","authority without dominance"], hint:"Who synthesises and allocates rather than invents or critiques?" },
-  { id:"S3", text:"Jordan loves the thrill of kick-off phases. Within days they’ve made useful contacts, gathered fresh intel, and spotted possibilities others missed. Midway through, their attention drifts—they’re scanning the horizon for the next spark. Teammates enjoy the energy but grumble about follow‑through.", role:"RI", alt:["PL"], reasons:["External scanning and networking yield quick opportunities (Resource Investigator).","High early energy with novelty-seeking, lower stamina for closure.","Value-add is connections and options, not finishing or systemising."], dims:["exploration","novelty","follow-through gap"], hint:"Think ‘outside links’ more than ‘inside polish’." },
-  { id:"S4", text:"Amira is valued for her thoroughness. She notices inconsistencies nobody else sees and insists they be corrected before submission. The team knows the quality will be high, but some complain she slows them with details that don’t feel mission‑critical. Amira says the details protect credibility.", role:"CF", alt:["IMP"], reasons:["Meticulous error‑spotting and insistence on standards (Completer Finisher).","Quality assurance ethos even under deadline pressure.","Tension between speed and precision is central to CF."], dims:["quality bar","risk aversion","detail orientation"], hint:"Who loses sleep over the last 5%?" },
-  { id:"S5", text:"Chris introduces bold, sometimes eccentric ideas that leave colleagues intrigued but occasionally exasperated. Many proposals are discarded; a few reshape the direction entirely. Chris tends to lose interest once others take over the practicalities.", role:"PL", alt:["RI","SP"], reasons:["Original ideation with variable practicality (Plant).","Disengages from routine execution once the spark is provided.","Disruptive creativity shifts trajectories when it lands."], dims:["originality","divergent thinking","hands-off execution"], hint:"The value is the spark, not the scaffolding." },
-  { id:"S6", text:"Casey listens quietly and, when asked, points out risks and weak assumptions others missed. They rarely speak first, but when they do, the group reconsiders. Some see Casey as too cool or negative, but their calls are usually right.", role:"ME", alt:["CO"], reasons:["Analytical, dispassionate evaluation and ‘cold’ judgement (Monitor Evaluator).","Contributes late with high-signal critique rather than energy or harmony.","Valued for accuracy over enthusiasm."], dims:["critical thinking","risk spotting","low affect"], hint:"Less spark, more signal-to-noise." },
-  { id:"S7", text:"Alex steps in when tension rises, noticing who’s quiet and drawing them in. Meetings feel safer and more inclusive, though decisions sometimes slow as compromises are brokered. Morale stays intact even through setbacks.", role:"TW", alt:["CO"], reasons:["Attends to cohesion, inclusion, and morale (Teamworker).","Trades speed for psychological safety and participation.","Stabilises relationships during ambiguity or stress."], dims:["harmony","inclusion","pace vs safety"], hint:"Whose instinct is ‘make the room work’ rather than ‘make the plan work’?" },
-  { id:"S8", text:"Priya takes a freewheeling brainstorm and turns it into a sequenced plan with checklists and simple operating routines. She’s reliable and steady day to day, but resists late changes that threaten the structure. Others appreciate the predictability yet sometimes chafe at the rigidity.", role:"IMP", alt:["CO","CF"], reasons:["Translates ideas into implementable systems (Implementer).","Reliability and order over improvisation; sceptical of last‑minute pivots.","Creates scaffolding the team can actually use."], dims:["systematisation","reliability","change‑resistance"], hint:"From concept to checklists—who owns that bridge?" },
-  { id:"S9", text:"Lee holds deep expertise in a narrow technical field. In crunch moments their insight unlocks progress, but outside that niche they’re quiet and don’t engage much. Some call this single‑minded; others call it indispensable.", role:"SP", alt:["ME"], reasons:["Depth over breadth—rare domain knowledge (Specialist).","High value at specific bottlenecks; limited contributions elsewhere.","Identity tied to expertise rather than coordination or drive."], dims:["expertise","bottleneck solving","narrow focus"], hint:"Whose value spikes exactly when the problem enters their lane?" },
-];
+    // === 2) Load SDKs from CDN ===
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, query, orderBy, onSnapshot, serverTimestamp, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-// -------- State --------
-let order = shuffle([...SCENARIOS]);
-let index = 0;
-let answers = {}; // id -> {pick, score, state}
-let choice = null;
-let revealAll = false;
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
 
-// -------- Elements --------
-const qCount = document.getElementById('qCount');
-const scoreBadge = document.getElementById('scoreBadge');
-const progressText = document.getElementById('progressText');
-const progressBar = document.getElementById('progressBar');
+    // ===== Game data (same as before) =====
+    const ROLES = {
+      PL: { name: "Plant", cluster: "Thought", blurb: "Original, imaginative ideas; may overlook practicalities." },
+      RI: { name: "Resource Investigator", cluster: "People", blurb: "Explores opportunities and contacts; may lose interest later." },
+      CO: { name: "Coordinator", cluster: "People", blurb: "Clarifies goals, delegates well; can seem over-directive." },
+      SH: { name: "Shaper", cluster: "Action", blurb: "Drives momentum under pressure; may be provocative or impatient." },
+      ME: { name: "Monitor Evaluator", cluster: "Thought", blurb: "Sober, strategic judgement; can appear critical or detached." },
+      TW: { name: "Teamworker", cluster: "People", blurb: "Supports, listens, and harmonises; may avoid decisive stands." },
+      IMP:{ name: "Implementer", cluster: "Action", blurb: "Turns ideas into plans and systems; can be inflexible to late change." },
+      CF: { name: "Completer Finisher", cluster: "Action", blurb: "Polishes and perfects; may worry over details and pace." },
+      SP: { name: "Specialist", cluster: "Thought", blurb: "Provides rare expertise; narrow focus outside their niche." },
+    };
+    const ROLE_ORDER = ["PL","RI","CO","SH","ME","TW","IMP","CF","SP"];
 
-const scenarioTitle = document.getElementById('scenarioTitle');
-const scenarioText = document.getElementById('scenarioText');
-const clusterBadge = document.getElementById('clusterBadge');
-const hintBtn = document.getElementById('hintBtn');
-const hintBox = document.getElementById('hintBox');
-const optionsBox = document.getElementById('options');
-const submitBtn = document.getElementById('submitBtn');
-const prevBtn = document.getElementById('prevBtn');
-const nextBtn = document.getElementById('nextBtn');
-const resetBtn = document.getElementById('resetBtn');
-const feedback = document.getElementById('feedback');
+    const SCENARIOS = [
+      { id:"S1", text:"In the early stages of brainstorming, Devon is restless. They press the group to stop circling and commit to one direction. Their urgency creates momentum, but some teammates feel bulldozed. When questioned, Devon insists that progress is better than perfection.", role:"SH", alt:["CO","IMP"], reasons:["Pushes for pace and direction under ambiguity (classic Shaper driver).","Willingness to provoke and risk ruffling feathers to avoid drift.","Focus on momentum over polish is an action-bias hallmark."], dims:["time pressure","conflict tolerance","momentum vs perfection"], hint:"Notice the intolerance for dithering and appetite for friction." },
+      { id:"S2", text:"Morgan rarely dominates meetings but has a talent for distilling sprawling conversations into a clear set of options. They don’t push a personal agenda, yet people look to them to frame decisions. Occasionally they’re accused of being too hands-off, quietly steering rather than jumping in.", role:"CO", alt:["ME","TW"], reasons:["Clarifies goals and frames choices without hijacking content (Coordinator).","Delegative, agenda-light posture with social authority.","Perception of ‘steering’ speaks to orchestration rather than analysis alone."], dims:["sense-making","delegation","authority without dominance"], hint:"Who synthesises and allocates rather than invents or critiques?" },
+      { id:"S3", text:"Jordan loves the thrill of kick-off phases. Within days they’ve made useful contacts, gathered fresh intel, and spotted possibilities others missed. Midway through, their attention drifts—they’re scanning the horizon for the next spark. Teammates enjoy the energy but grumble about follow‑through.", role:"RI", alt:["PL"], reasons:["External scanning and networking yield quick opportunities (Resource Investigator).","High early energy with novelty-seeking, lower stamina for closure.","Value-add is connections and options, not finishing or systemising."], dims:["exploration","novelty","follow-through gap"], hint:"Think ‘outside links’ more than ‘inside polish’." },
+      { id:"S4", text:"Amira is valued for her thoroughness. She notices inconsistencies nobody else sees and insists they be corrected before submission. The team knows the quality will be high, but some complain she slows them with details that don’t feel mission‑critical. Amira says the details protect credibility.", role:"CF", alt:["IMP"], reasons:["Meticulous error‑spotting and insistence on standards (Completer Finisher).","Quality assurance ethos even under deadline pressure.","Tension between speed and precision is central to CF."], dims:["quality bar","risk aversion","detail orientation"], hint:"Who loses sleep over the last 5%?" },
+      { id:"S5", text:"Chris introduces bold, sometimes eccentric ideas that leave colleagues intrigued but occasionally exasperated. Many proposals are discarded; a few reshape the direction entirely. Chris tends to lose interest once others take over the practicalities.", role:"PL", alt:["RI","SP"], reasons:["Original ideation with variable practicality (Plant).","Disengages from routine execution once the spark is provided.","Disruptive creativity shifts trajectories when it lands."], dims:["originality","divergent thinking","hands-off execution"], hint:"The value is the spark, not the scaffolding." },
+      { id:"S6", text:"Casey listens quietly and, when asked, points out risks and weak assumptions others missed. They rarely speak first, but when they do, the group reconsiders. Some see Casey as too cool or negative, but their calls are usually right.", role:"ME", alt:["CO"], reasons:["Analytical, dispassionate evaluation and ‘cold’ judgement (Monitor Evaluator).","Contributes late with high-signal critique rather than energy or harmony.","Valued for accuracy over enthusiasm."], dims:["critical thinking","risk spotting","low affect"], hint:"Less spark, more signal-to-noise." },
+      { id:"S7", text:"Alex steps in when tension rises, noticing who’s quiet and drawing them in. Meetings feel safer and more inclusive, though decisions sometimes slow as compromises are brokered. Morale stays intact even through setbacks.", role:"TW", alt:["CO"], reasons:["Attends to cohesion, inclusion, and morale (Teamworker).","Trades speed for psychological safety and participation.","Stabilises relationships during ambiguity or stress."], dims:["harmony","inclusion","pace vs safety"], hint:"Whose instinct is ‘make the room work’ rather than ‘make the plan work’?" },
+      { id:"S8", text:"Priya takes a freewheeling brainstorm and turns it into a sequenced plan with checklists and simple operating routines. She’s reliable and steady day to day, but resists late changes that threaten the structure. Others appreciate the predictability yet sometimes chafe at the rigidity.", role:"IMP", alt:["CO","CF"], reasons:["Translates ideas into implementable systems (Implementer).","Reliability and order over improvisation; sceptical of last‑minute pivots.","Creates scaffolding the team can actually use."], dims:["systematisation","reliability","change‑resistance"], hint:"From concept to checklists—who owns that bridge?" },
+      { id:"S9", text:"Lee holds deep expertise in a narrow technical field. In crunch moments their insight unlocks progress, but outside that niche they’re quiet and don’t engage much. Some call this single‑minded; others call it indispensable.", role:"SP", alt:["ME"], reasons:["Depth over breadth—rare domain knowledge (Specialist).","High value at specific bottlenecks; limited contributions elsewhere.","Identity tied to expertise rather than coordination or drive."], dims:["expertise","bottleneck solving","narrow focus"], hint:"Whose value spikes exactly when the problem enters their lane?" },
+    ];
 
-const clusterGrid = document.getElementById('clusterGrid');
-const review = document.getElementById('review');
-const toggleAll = document.getElementById('toggleAll');
-const finalBox = document.getElementById('finalBox');
-const finalScore = document.getElementById('finalScore');
-const finalTotal = document.getElementById('finalTotal');
+    // ======== Local state ========
+    let order = shuffle([...SCENARIOS]);
+    let index = 0; let answers = {}; let choice = null; let revealAll = false;
+    let session = null; let team = null; // session code + team name
 
-// -------- Init --------
-render();
+    // ======== DOM ========
+    const qCount = document.getElementById('qCount');
+    const scoreBadge = document.getElementById('scoreBadge');
+    const progressText = document.getElementById('progressText');
+    const progressBar = document.getElementById('progressBar');
 
-// -------- Handlers --------
-hintBtn.addEventListener('click',()=>{
-  const s = order[index];
-  if(!s.hint){ hintBox.style.display='none'; return; }
-  hintBox.textContent = s.hint;
-  hintBox.style.display = (hintBox.style.display==='none')?'block':'none';
-});
+    const scenarioTitle = document.getElementById('scenarioTitle');
+    const scenarioText = document.getElementById('scenarioText');
+    const clusterBadge = document.getElementById('clusterBadge');
+    const hintBtn = document.getElementById('hintBtn');
+    const hintBox = document.getElementById('hintBox');
+    const optionsBox = document.getElementById('options');
+    const submitBtn = document.getElementById('submitBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const feedback = document.getElementById('feedback');
 
-submitBtn.addEventListener('click',()=>{
-  if(!choice) return;
-  const s = order[index];
-  const correct = choice === s.role;
-  const partial = !correct && (s.alt||[]).includes(choice);
-  const state = correct ? 'correct' : partial ? 'partial' : 'incorrect';
-  const pts = correct ? 1 : partial ? .5 : 0;
-  answers[s.id] = { pick: choice, score: pts, state };
-  choice = null; // lock selection until changed
-  render();
-});
+    const lobbyCard = document.getElementById('lobbyCard');
+    const createBtn = document.getElementById('createBtn');
+    const joinBtn = document.getElementById('joinBtn');
+    const randomBtn = document.getElementById('randomBtn');
+    const sessionInput = document.getElementById('sessionCode');
+    const teamInput = document.getElementById('teamName');
+    const lobbyStatus = document.getElementById('lobbyStatus');
+    const questionCard = document.getElementById('questionCard');
+    const sessionDisplay = document.getElementById('sessionDisplay');
 
-prevBtn.addEventListener('click',()=>{ index=Math.max(0,index-1); choice=null; render(); });
-nextBtn.addEventListener('click',()=>{ index=Math.min(order.length-1,index+1); choice=null; render(); });
-resetBtn.addEventListener('click',()=>{ order = shuffle([...SCENARIOS]); index=0; answers={}; choice=null; revealAll=false; render(); });
+    const sbSession = document.getElementById('sbSession');
+    const scoreTable = document.querySelector('#scoreTable tbody');
 
-toggleAll.addEventListener('click',()=>{ revealAll=!revealAll; toggleAll.textContent = revealAll? 'Hide all explanations' : 'Show all explanations'; renderReview(); });
+    const toggleAll = document.getElementById('toggleAll');
+    const clusterGrid = document.getElementById('clusterGrid');
+    const review = document.getElementById('review');
+    const finalBox = document.getElementById('finalBox');
+    const finalScore = document.getElementById('finalScore');
+    const finalTotal = document.getElementById('finalTotal');
 
-// -------- Render --------
-function render(){
-  const total = order.length;
-  const answeredCount = Object.values(answers).filter(a=>a.state && a.pick!=null).length;
-  const score = Object.values(answers).reduce((sum,a)=>sum+(a.score||0),0);
-  qCount.textContent = `Questions: ${total}`;
-  scoreBadge.textContent = `Score: ${score.toFixed(1)}`;
-  progressText.textContent = `${answeredCount}/${total}`;
-  progressBar.style.width = `${Math.round(answeredCount/total*100)}%`;
+    // ======== Lobby actions ========
+    randomBtn.addEventListener('click', ()=>{ sessionInput.value = randomCode(); });
 
-  const s = order[index];
-  scenarioTitle.textContent = `Scenario ${index+1}`;
-  scenarioText.textContent = `“${s.text}”`;
-  clusterBadge.textContent = ROLES[s.role].cluster;
-  hintBox.style.display='none';
+    createBtn.addEventListener('click', async ()=>{
+      const code = cleanCode(sessionInput.value); const tn = teamInput.value.trim();
+      if(!code || !tn){ return setLobbyMsg('Please enter a session code and team name.'); }
+      // Create session doc (idempotent)
+      const sref = doc(db, 'sessions', code);
+      await setDoc(sref, { createdAt: serverTimestamp() }, { merge: true });
+      await joinTeam(code, tn);
+    });
 
-  // Options
-  optionsBox.innerHTML = '';
-  ROLE_ORDER.forEach(rk=>{
-    const opt = document.createElement('label');
-    opt.className = 'opt';
-    const input = document.createElement('input');
-    input.type='radio'; input.name='role'; input.value=rk;
-    input.checked = choice===rk;
-    input.addEventListener('change',()=>{ choice = rk; });
-    const box = document.createElement('div');
-    const title = document.createElement('div');
-    title.innerHTML = `<b>${ROLES[rk].name}</b> <span class="small">(${rk})</span>`;
-    const sub = document.createElement('div');
-    sub.className='small';
-    sub.textContent = `${ROLES[rk].cluster} • ${ROLES[rk].blurb}`;
-    box.appendChild(title); box.appendChild(sub);
-    opt.appendChild(input); opt.appendChild(box);
-    optionsBox.appendChild(opt);
-  });
+    joinBtn.addEventListener('click', async ()=>{
+      const code = cleanCode(sessionInput.value); const tn = teamInput.value.trim();
+      if(!code || !tn){ return setLobbyMsg('Please enter a session code and team name.'); }
+      await joinTeam(code, tn);
+    });
 
-  // Buttons
-  prevBtn.disabled = index===0;
-  nextBtn.disabled = index===total-1;
-
-  // Feedback
-  feedback.innerHTML='';
-  const ans = answers[s.id];
-  if(ans){
-    const panel = document.createElement('div');
-    panel.className = 'result';
-    const status = ans.state==='correct'? 'good' : ans.state==='partial' ? 'warn' : 'bad';
-    panel.classList.add(status);
-    const picked = ROLES[ans.pick].name;
-    panel.innerHTML = `<div class="small"><b>${caps(ans.state)}</b> ${ans.state==='correct'?'+1':ans.state==='partial'?'+0.5':'+0'}</div>
-      <div class="small">You picked <b>${picked}</b>. Correct role: <b>${ROLES[s.role].name}</b>.</div>`;
-    const ul = document.createElement('ul'); ul.style.marginTop='8px';
-    s.reasons.forEach(r=>{ const li=document.createElement('li'); li.textContent=r; ul.appendChild(li); });
-    panel.appendChild(ul);
-    const chips = document.createElement('div'); chips.className='chips';
-    s.dims.forEach(d=>{ const c=document.createElement('span'); c.className='chip'; c.textContent=d; chips.appendChild(c); });
-    panel.appendChild(chips);
-    if(s.alt && s.alt.length){
-      const p = document.createElement('p'); p.className='small'; p.style.marginTop='6px';
-      p.textContent = 'Near‑misses: ' + s.alt.map(a=>ROLES[a].name).join(', ') + ' can resemble this scenario depending on context.';
-      panel.appendChild(p);
+    async function joinTeam(code, tn){
+      const tref = doc(db, 'sessions', code, 'teams', tn);
+      const snap = await getDoc(tref);
+      if(!snap.exists()){
+        await setDoc(tref, { score: 0, answered: 0, updatedAt: serverTimestamp() });
+      }
+      session = code; team = tn;
+      lobbyCard.style.display = 'none';
+      questionCard.style.display = 'block';
+      sessionDisplay.textContent = `Session: ${session} • Team: ${team}`;
+      sbSession.textContent = `Session ${session}`;
+      listenScoreboard();
+      render();
     }
-    feedback.appendChild(panel);
-  }
 
-  renderClusters();
-  renderReview();
+    function setLobbyMsg(msg){ lobbyStatus.textContent = msg; }
 
-  // Final box
-  const completed = answeredCount===total;
-  finalBox.style.display = completed ? 'block' : 'none';
-  if(completed){
-    finalScore.textContent = score.toFixed(1);
-    finalTotal.textContent = total;
-  }
-}
+    function cleanCode(s){ return (s||'').replace(/[^a-zA-Z0-9]/g,'').toUpperCase(); }
+    function randomCode(){ return Math.random().toString(36).slice(2,8).toUpperCase(); }
 
-function renderClusters(){
-  const totals = {Thought:0, People:0, Action:0};
-  const corrects = {Thought:0, People:0, Action:0};
-  order.forEach(s=>{ totals[ROLES[s.role].cluster]++; if(answers[s.id]?.state==='correct') corrects[ROLES[s.role].cluster]++; });
-  clusterGrid.innerHTML='';
-  ["Thought","People","Action"].forEach(cl=>{
-    const box = document.createElement('div'); box.className='cluster-box';
-    box.innerHTML = `<div class="small">${cl}</div><div style="font-size:22px;font-weight:700">${corrects[cl]}<span class="muted" style="font-size:16px">/${totals[cl]}</span></div><div class="small">Correct in this cluster</div>`;
-    clusterGrid.appendChild(box);
-  });
-}
+    // ======== Quiz handlers ========
+    hintBtn.addEventListener('click',()=>{ const s = order[index]; if(!s.hint){ hintBox.style.display='none'; return; } hintBox.textContent = s.hint; hintBox.style.display = (hintBox.style.display==='none')?'block':'none'; });
 
-function renderReview(){
-  review.innerHTML='';
-  order.forEach((s,i)=>{
-    const det = document.createElement('details');
-    if(revealAll) det.setAttribute('open','open');
-    const a = answers[s.id];
-    const picked = a?.pick ? ROLES[a.pick].name : '—';
-    const state = a?.state || 'pending';
-    const chip = state==='correct'? '✅ Correct' : state==='partial'? '🟡 Almost' : state==='incorrect'? '❌ Wrong' : '⏳ Pending';
-    const sum = document.createElement('summary');
-    sum.innerHTML = `<span class="small">Q${i+1}</span> <span>${chip}</span> <span class="small">&nbsp;•&nbsp; Correct: <b>${ROLES[s.role].name}</b> &nbsp;•&nbsp; You: <b>${picked}</b></span>`;
-    det.appendChild(sum);
+    submitBtn.addEventListener('click', async ()=>{
+      if(!choice) return; const s = order[index];
+      const correct = choice === s.role; const partial = !correct && (s.alt||[]).includes(choice);
+      const state = correct ? 'correct' : partial ? 'partial' : 'incorrect'; const pts = correct ? 1 : partial ? .5 : 0;
+      answers[s.id] = { pick: choice, score: pts, state };
+      choice = null; render();
+      // Push to Firestore (increment team score)
+      if(session && team){
+        const tref = doc(db, 'sessions', session, 'teams', team);
+        await updateDoc(tref, { score: increment(pts), answered: increment(1), updatedAt: serverTimestamp() });
+      }
+    });
 
-    const body = document.createElement('div'); body.style.marginTop='8px';
-    const p = document.createElement('p'); p.className='small'; p.textContent = `“${s.text}”`; body.appendChild(p);
-    const ul = document.createElement('ul'); s.reasons.forEach(r=>{ const li=document.createElement('li'); li.textContent=r; ul.appendChild(li); }); body.appendChild(ul);
-    const chips = document.createElement('div'); chips.className='chips'; s.dims.forEach(d=>{ const c=document.createElement('span'); c.className='chip'; c.textContent=d; chips.appendChild(c); }); body.appendChild(chips);
-    if(s.alt && s.alt.length){ const p2=document.createElement('p'); p2.className='small'; p2.textContent = 'Plausible alternatives: ' + s.alt.map(k=>ROLES[k].name).join(', '); body.appendChild(p2); }
+    prevBtn.addEventListener('click',()=>{ index=Math.max(0,index-1); choice=null; render(); });
+    nextBtn.addEventListener('click',()=>{ index=Math.min(order.length-1,index+1); choice=null; render(); });
+    resetBtn.addEventListener('click',()=>{ order = shuffle([...SCENARIOS]); index=0; answers={}; choice=null; revealAll=false; render(); });
 
-    det.appendChild(body);
-    review.appendChild(det);
-  });
-}
+    toggleAll.addEventListener('click',()=>{ revealAll=!revealAll; toggleAll.textContent = revealAll? 'Hide all explanations' : 'Show all explanations'; renderReview(); });
 
-// -------- Utils --------
-function shuffle(arr){
-  const a=[...arr];
-  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
-  return a;
-}
-function caps(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
-</script>
+    // ======== Scoreboard realtime listener ========
+    function listenScoreboard(){
+      const teamsCol = collection(db, 'sessions', session, 'teams');
+      const q = query(teamsCol, orderBy('score','desc'));
+      onSnapshot(q, (snap)=>{
+        scoreTable.innerHTML = '';
+        snap.forEach(docu=>{
+          const d = docu.data();
+          const tr = document.createElement('tr');
+          const when = d.updatedAt?.toDate ? d.updatedAt.toDate().toLocaleTimeString() : '—';
+          tr.innerHTML = `<td>${docu.id}</td><td><b>${(d.score||0).toFixed(1)}</b></td><td>${d.answered||0}</td><td class="small">${when}</td>`;
+          scoreTable.appendChild(tr);
+        });
+      });
+    }
+
+    // ======== Render (quiz UI) ========
+    function render(){
+      const total = order.length;
+      const answeredCount = Object.values(answers).filter(a=>a.state && a.pick!=null).length;
+      const score = Object.values(answers).reduce((sum,a)=>sum+(a.score||0),0);
+      qCount.textContent = `Questions: ${total}`;
+      scoreBadge.textContent = `Score: ${score.toFixed(1)}`;
+      progressText.textContent = `${answeredCount}/${total}`;
+      progressBar.style.width = `${Math.round(answeredCount/total*100)}%`;
+
+      const s = order[index];
+      scenarioTitle.textContent = `Scenario ${index+1}`;
+      scenarioText.textContent = `“${s.text}”`;
+      clusterBadge.textContent = ROLES[s.role].cluster;
+      hintBox.style.display='none';
+
+      // Options
+      optionsBox.innerHTML = '';
+      ROLE_ORDER.forEach(rk=>{
+        const opt = document.createElement('label'); opt.className = 'opt';
+        const input = document.createElement('input'); input.type='radio'; input.name='role'; input.value=rk; input.checked = choice===rk; input.addEventListener('change',()=>{ choice = rk; });
+        const box = document.createElement('div');
+        const title = document.createElement('div'); title.innerHTML = `<b>${ROLES[rk].name}</b> <span class="small">(${rk})</span>`;
+        const sub = document.createElement('div'); sub.className='small'; sub.textContent = `${ROLES[rk].cluster} • ${ROLES[rk].blurb}`;
+        box.appendChild(title); box.appendChild(sub);
+        opt.appendChild(input); opt.appendChild(box); optionsBox.appendChild(opt);
+      });
+
+      // Buttons
+      prevBtn.disabled = index===0; nextBtn.disabled = index===total-1;
+
+      // Feedback
+      feedback.innerHTML='';
+      const ans = answers[s.id];
+      if(ans){
+        const panel = document.createElement('div'); panel.className = 'result'; const status = ans.state==='correct'? 'good' : ans.state==='partial' ? 'warn' : 'bad'; panel.classList.add(status);
+        const picked = ROLES[ans.pick].name;
+        panel.innerHTML = `<div class="small"><b>${caps(ans.state)}</b> ${ans.state==='correct'?'+1':ans.state==='partial'?'+0.5':'+0'}</div>
+          <div class="small">You picked <b>${picked}</b>. Correct role: <b>${ROLES[s.role].name}</b>.</div>`;
+        const ul = document.createElement('ul'); ul.style.marginTop='8px'; s.reasons.forEach(r=>{ const li=document.createElement('li'); li.textContent=r; ul.appendChild(li); }); panel.appendChild(ul);
+        const chips = document.createElement('div'); chips.className='chips'; s.dims.forEach(d=>{ const c=document.createElement('span'); c.className='chip'; c.textContent=d; chips.appendChild(c); }); panel.appendChild(chips);
+        if(s.alt && s.alt.length){ const p = document.createElement('p'); p.className='small'; p.style.marginTop='6px'; p.textContent = 'Near‑misses: ' + s.alt.map(a=>ROLES[a].name).join(', ') + ' can resemble this scenario depending on context.'; panel.appendChild(p); }
+        feedback.appendChild(panel);
+      }
+
+      renderClusters(); renderReview();
+      const completed = answeredCount===total; finalBox.style.display = completed ? 'block' : 'none'; if(completed){ finalScore.textContent = score.toFixed(1); finalTotal.textContent = total; }
+    }
+
+    function renderClusters(){
+      const totals = {Thought:0, People:0, Action:0}; const corrects = {Thought:0, People:0, Action:0};
+      order.forEach(s=>{ totals[ROLES[s.role].cluster]++; if(answers[s.id]?.state==='correct') corrects[ROLES[s.role].cluster]++; });
+      clusterGrid.innerHTML='';
+      ["Thought","People","Action"].forEach(cl=>{ const box = document.createElement('div'); box.className='cluster-box'; box.innerHTML = `<div class="small">${cl}</div><div style="font-size:22px;font-weight:700">${corrects[cl]}<span class="muted" style="font-size:16px">/${totals[cl]}</span></div><div class="small">Correct in this cluster</div>`; clusterGrid.appendChild(box); });
+    }
+
+    function renderReview(){
+      review.innerHTML='';
+      order.forEach((s,i)=>{ const det = document.createElement('details'); if(revealAll) det.setAttribute('open','open'); const a = answers[s.id]; const picked = a?.pick ? ROLES[a.pick].name : '—'; const state = a?.state || 'pending'; const chip = state==='correct'? '✅ Correct' : state==='partial'? '🟡 Almost' : state==='incorrect'? '❌ Wrong' : '⏳ Pending'; const sum = document.createElement('summary'); sum.innerHTML = `<span class="small">Q${i+1}</span> <span>${chip}</span> <span class="small">&nbsp;•&nbsp; Correct: <b>${ROLES[s.role].name}</b> &nbsp;•&nbsp; You: <b>${picked}</b></span>`; det.appendChild(sum); const body = document.createElement('div'); body.style.marginTop='8px'; const p = document.createElement('p'); p.className='small'; p.textContent = `“${s.text}”`; body.appendChild(p); const ul = document.createElement('ul'); s.reasons.forEach(r=>{ const li=document.createElement('li'); li.textContent=r; ul.appendChild(li); }); body.appendChild(ul); const chips = document.createElement('div'); chips.className='chips'; s.dims.forEach(d=>{ const c=document.createElement('span'); c.className='chip'; c.textContent=d; chips.appendChild(c); }); body.appendChild(chips); if(s.alt && s.alt.length){ const p2=document.createElement('p'); p2.className='small'; p2.textContent = 'Plausible alternatives: ' + s.alt.map(k=>ROLES[k].name).join(', '); body.appendChild(p2); } det.appendChild(body); review.appendChild(det); });
+    }
+
+    // ======== Utils ========
+    function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+    function caps(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+  </script>
 </body>
 </html>
