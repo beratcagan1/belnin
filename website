@@ -1,0 +1,540 @@
+import React, { useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { CheckCircle, XCircle, CircleHelp, Info, ArrowRight, ArrowLeft, RefreshCcw, BarChart2, Lightbulb } from "lucide-react";
+
+// shadcn/ui components (available in this environment)
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+
+// ----------------------
+// Data model
+// ----------------------
+
+type RoleKey =
+  | "PL" // Plant
+  | "RI" // Resource Investigator
+  | "CO" // Coordinator
+  | "SH" // Shaper
+  | "ME" // Monitor Evaluator
+  | "TW" // Teamworker
+  | "IMP" // Implementer
+  | "CF" // Completer Finisher
+  | "SP"; // Specialist
+
+const ROLES: Record<RoleKey, { name: string; cluster: "Thought" | "People" | "Action"; blurb: string }> = {
+  PL: {
+    name: "Plant",
+    cluster: "Thought",
+    blurb: "Original, imaginative ideas; may overlook practicalities.",
+  },
+  RI: {
+    name: "Resource Investigator",
+    cluster: "People",
+    blurb: "Explores opportunities and contacts; may lose interest later.",
+  },
+  CO: {
+    name: "Coordinator",
+    cluster: "People",
+    blurb: "Clarifies goals, delegates well; can seem over-directive.",
+  },
+  SH: {
+    name: "Shaper",
+    cluster: "Action",
+    blurb: "Drives momentum under pressure; may be provocative or impatient.",
+  },
+  ME: {
+    name: "Monitor Evaluator",
+    cluster: "Thought",
+    blurb: "Sober, strategic judgement; can appear critical or detached.",
+  },
+  TW: {
+    name: "Teamworker",
+    cluster: "People",
+    blurb: "Supports, listens, and harmonises; may avoid decisive stands.",
+  },
+  IMP: {
+    name: "Implementer",
+    cluster: "Action",
+    blurb: "Turns ideas into plans and systems; can be inflexible to late change.",
+  },
+  CF: {
+    name: "Completer Finisher",
+    cluster: "Action",
+    blurb: "Polishes and perfects; may worry over details and pace.",
+  },
+  SP: {
+    name: "Specialist",
+    cluster: "Thought",
+    blurb: "Provides rare expertise; narrow focus outside their niche.",
+  },
+};
+
+interface Scenario {
+  id: string;
+  text: string;
+  role: RoleKey;
+  alt?: RoleKey[]; // near-miss roles for partial credit
+  reasons: string[]; // why this matches the role
+  dims: string[]; // tags/dimensions present in the vignette
+  hint?: string; // optional subtle hint
+}
+
+const SCENARIOS: Scenario[] = [
+  {
+    id: "S1",
+    text:
+      "In the early stages of brainstorming, Devon is restless. They press the group to stop circling and commit to one direction. Their urgency creates momentum, but some teammates feel bulldozed. When questioned, Devon insists that progress is better than perfection.",
+    role: "SH",
+    alt: ["CO", "IMP"],
+    reasons: [
+      "Pushes for pace and direction under ambiguity (classic Shaper driver).",
+      "Willingness to provoke and risk ruffling feathers to avoid drift.",
+      "Focus on momentum over polish is an action-bias hallmark.",
+    ],
+    dims: ["time pressure", "conflict tolerance", "momentum vs perfection"],
+    hint: "Notice the intolerance for dithering and appetite for friction.",
+  },
+  {
+    id: "S2",
+    text:
+      "Morgan rarely dominates meetings but has a talent for distilling sprawling conversations into a clear set of options. They don’t push a personal agenda, yet people look to them to frame decisions. Occasionally they’re accused of being too hands-off, quietly steering rather than jumping in.",
+    role: "CO",
+    alt: ["ME", "TW"],
+    reasons: [
+      "Clarifies goals and frames choices without hijacking content (Coordinator).",
+      "Delegative, agenda-light posture with social authority.",
+      "Perception of ‘steering’ speaks to orchestration rather than analysis alone.",
+    ],
+    dims: ["sense-making", "delegation", "authority without dominance"],
+    hint: "Who synthesises and allocates rather than invents or critiques?",
+  },
+  {
+    id: "S3",
+    text:
+      "Jordan loves the thrill of kick-off phases. Within days they’ve made useful contacts, gathered fresh intel, and spotted possibilities others missed. Midway through, their attention drifts—they’re scanning the horizon for the next spark. Teammates enjoy the energy but grumble about follow‑through.",
+    role: "RI",
+    alt: ["PL"],
+    reasons: [
+      "External scanning and networking yield quick opportunities (Resource Investigator).",
+      "High early energy with novelty-seeking, lower stamina for closure.",
+      "Value-add is connections and options, not finishing or systemising.",
+    ],
+    dims: ["exploration", "novelty", "follow-through gap"],
+    hint: "Think ‘outside links’ more than ‘inside polish’.",
+  },
+  {
+    id: "S4",
+    text:
+      "Amira is valued for her thoroughness. She notices inconsistencies nobody else sees and insists they be corrected before submission. The team knows the quality will be high, but some complain she slows them with details that don’t feel mission‑critical. Amira says the details protect credibility.",
+    role: "CF",
+    alt: ["IMP"],
+    reasons: [
+      "Meticulous error‑spotting and insistence on standards (Completer Finisher).",
+      "Quality assurance ethos even under deadline pressure.",
+      "Tension between speed and precision is central to CF.",
+    ],
+    dims: ["quality bar", "risk aversion", "detail orientation"],
+    hint: "Who loses sleep over the last 5%?",
+  },
+  {
+    id: "S5",
+    text:
+      "Chris introduces bold, sometimes eccentric ideas that leave colleagues intrigued but occasionally exasperated. Many proposals are discarded; a few reshape the direction entirely. Chris tends to lose interest once others take over the practicalities.",
+    role: "PL",
+    alt: ["RI", "SP"],
+    reasons: [
+      "Original ideation with variable practicality (Plant).",
+      "Disengages from routine execution once the spark is provided.",
+      "Disruptive creativity shifts trajectories when it lands.",
+    ],
+    dims: ["originality", "divergent thinking", "hands-off execution"],
+    hint: "The value is the spark, not the scaffolding.",
+  },
+  {
+    id: "S6",
+    text:
+      "Casey listens quietly and, when asked, points out risks and weak assumptions others missed. They rarely speak first, but when they do, the group reconsiders. Some see Casey as too cool or negative, but their calls are usually right.",
+    role: "ME",
+    alt: ["CO"],
+    reasons: [
+      "Analytical, dispassionate evaluation and ‘cold’ judgement (Monitor Evaluator).",
+      "Contributes late with high-signal critique rather than energy or harmony.",
+      "Valued for accuracy over enthusiasm.",
+    ],
+    dims: ["critical thinking", "risk spotting", "low affect"],
+    hint: "Less spark, more signal-to-noise.",
+  },
+  {
+    id: "S7",
+    text:
+      "Alex steps in when tension rises, noticing who’s quiet and drawing them in. Meetings feel safer and more inclusive, though decisions sometimes slow as compromises are brokered. Morale stays intact even through setbacks.",
+    role: "TW",
+    alt: ["CO"],
+    reasons: [
+      "Attends to cohesion, inclusion, and morale (Teamworker).",
+      "Trades speed for psychological safety and participation.",
+      "Stabilises relationships during ambiguity or stress.",
+    ],
+    dims: ["harmony", "inclusion", "pace vs safety"],
+    hint: "Whose instinct is ‘make the room work’ rather than ‘make the plan work’?",
+  },
+  {
+    id: "S8",
+    text:
+      "Priya takes a freewheeling brainstorm and turns it into a sequenced plan with checklists and simple operating routines. She’s reliable and steady day to day, but resists late changes that threaten the structure. Others appreciate the predictability yet sometimes chafe at the rigidity.",
+    role: "IMP",
+    alt: ["CO", "CF"],
+    reasons: [
+      "Translates ideas into implementable systems (Implementer).",
+      "Reliability and order over improvisation; sceptical of last‑minute pivots.",
+      "Creates scaffolding the team can actually use.",
+    ],
+    dims: ["systematisation", "reliability", "change‑resistance"],
+    hint: "From concept to checklists—who owns that bridge?",
+  },
+  {
+    id: "S9",
+    text:
+      "Lee holds deep expertise in a narrow technical field. In crunch moments their insight unlocks progress, but outside that niche they’re quiet and don’t engage much. Some call this single‑minded; others call it indispensable.",
+    role: "SP",
+    alt: ["ME"],
+    reasons: [
+      "Depth over breadth—rare domain knowledge (Specialist).",
+      "High value at specific bottlenecks; limited contributions elsewhere.",
+      "Identity tied to expertise rather than coordination or drive.",
+    ],
+    dims: ["expertise", "bottleneck solving", "narrow focus"],
+    hint: "Whose value spikes exactly when the problem enters their lane?",
+  },
+];
+
+// ----------------------
+// Utils
+// ----------------------
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+const ROLE_ORDER: RoleKey[] = ["PL", "RI", "CO", "SH", "ME", "TW", "IMP", "CF", "SP"];
+
+// ----------------------
+// Component
+// ----------------------
+
+export default function BelbinDeepQuiz() {
+  const scenarios = useMemo(() => shuffle(SCENARIOS), []);
+  const [index, setIndex] = useState(0);
+  const [choice, setChoice] = useState<RoleKey | null>(null);
+  const [answers, setAnswers] = useState<{
+    [id: string]: {
+      pick: RoleKey | null;
+      score: number; // 1 correct, 0.5 partial, 0 incorrect
+      state: "unanswered" | "correct" | "partial" | "incorrect";
+    };
+  }>({});
+  const [showHint, setShowHint] = useState(false);
+  const [revealAll, setRevealAll] = useState(false);
+
+  const current = scenarios[index];
+  const total = scenarios.length;
+  const answeredCount = Object.values(answers).filter((a) => a.state !== "unanswered" && a.pick !== null).length;
+  const score = Object.values(answers).reduce((sum, a) => sum + (a.score || 0), 0);
+
+  const progress = Math.round((answeredCount / total) * 100);
+
+  function submitGuess() {
+    if (!choice) return;
+    const correct = choice === current.role;
+    const partial = !correct && (current.alt || []).includes(choice);
+    const state = correct ? "correct" : partial ? "partial" : "incorrect";
+    const pts = correct ? 1 : partial ? 0.5 : 0;
+    setAnswers((prev) => ({
+      ...prev,
+      [current.id]: {
+        pick: choice,
+        score: pts,
+        state,
+      },
+    }));
+  }
+
+  function next() {
+    setShowHint(false);
+    setChoice(null);
+    setIndex((i) => Math.min(i + 1, total - 1));
+  }
+
+  function prev() {
+    setShowHint(false);
+    setChoice(null);
+    setIndex((i) => Math.max(i - 1, 0));
+  }
+
+  function resetGame() {
+    setIndex(0);
+    setChoice(null);
+    setAnswers({});
+    setShowHint(false);
+    setRevealAll(false);
+  }
+
+  const currentAnswer = answers[current.id];
+  const isAnswered = currentAnswer && currentAnswer.state !== "unanswered";
+
+  // Cluster stats for end-of-game analysis
+  const clusterTotals = {
+    Thought: 0,
+    People: 0,
+    Action: 0,
+  } as Record<"Thought" | "People" | "Action", number>;
+  const clusterCorrect = {
+    Thought: 0,
+    People: 0,
+    Action: 0,
+  } as Record<"Thought" | "People" | "Action", number>;
+
+  scenarios.forEach((s) => {
+    const cl = ROLES[s.role].cluster;
+    clusterTotals[cl] += 1;
+    const ans = answers[s.id];
+    if (ans && ans.state === "correct") clusterCorrect[cl] += 1;
+  });
+
+  const completed = answeredCount === total;
+
+  return (
+    <div className="w-full min-h-screen bg-gradient-to-b from-white to-slate-50 p-4 sm:p-8">
+      <div className="mx-auto max-w-4xl space-y-6">
+        <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Belbin Deep Guessing Game</h1>
+            <p className="text-sm text-slate-600">Layered scenarios • immediate feedback • reasoning and final analysis</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant="secondary" className="text-slate-700">Questions: {total}</Badge>
+            <Badge className="bg-slate-900">Score: {score.toFixed(1)}</Badge>
+          </div>
+        </header>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-medium text-slate-600">Progress</div>
+            <div className="text-xs text-slate-500">{answeredCount}/{total}</div>
+          </div>
+          <Progress value={progress} />
+        </div>
+
+        <Card className="shadow-sm">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="text-lg">Scenario {index + 1}</CardTitle>
+                <CardDescription className="text-slate-600">Consider multiple dimensions (context, trade‑offs, team impact).</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{ROLES[current.role].cluster}</Badge>
+                <Button variant="ghost" size="sm" onClick={() => setShowHint((v) => !v)}>
+                  <Lightbulb className="h-4 w-4 mr-2" /> Hint
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={current.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.25 }}
+                className="text-base leading-7"
+              >
+                “{current.text}”
+              </motion.p>
+            </AnimatePresence>
+
+            {showHint && (
+              <div className="text-sm text-slate-600 rounded-xl border p-3 bg-slate-50 flex items-start gap-2">
+                <Info className="h-4 w-4 mt-0.5" />
+                <span>{current.hint}</span>
+              </div>
+            )}
+
+            <div className="rounded-xl border p-4">
+              <RadioGroup
+                value={choice ?? undefined}
+                onValueChange={(v) => setChoice(v as RoleKey)}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+              >
+                {ROLE_ORDER.map((rk) => (
+                  <label
+                    key={rk}
+                    htmlFor={`rk-${rk}`}
+                    className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-slate-50 ${
+                      choice === rk ? "ring-2 ring-slate-900" : ""
+                    }`}
+                  >
+                    <RadioGroupItem id={`rk-${rk}`} value={rk} />
+                    <div>
+                      <div className="font-medium">{ROLES[rk].name} <span className="text-xs align-middle text-slate-500">({rk})</span></div>
+                      <div className="text-xs text-slate-500">{ROLES[rk].cluster} • {ROLES[rk].blurb}</div>
+                    </div>
+                  </label>
+                ))}
+              </RadioGroup>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={submitGuess} disabled={!choice || isAnswered}>
+                <CheckCircle className="h-4 w-4 mr-2" /> Submit guess
+              </Button>
+              <Button variant="outline" onClick={prev} disabled={index === 0}>
+                <ArrowLeft className="h-4 w-4 mr-2" /> Prev
+              </Button>
+              <Button variant="outline" onClick={next} disabled={index === total - 1}>
+                Next <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+              <Button variant="ghost" onClick={resetGame}>
+                <RefreshCcw className="h-4 w-4 mr-2" /> Reset
+              </Button>
+            </div>
+
+            {/* Feedback panel */}
+            {isAnswered && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-xl border p-4 bg-white"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  {currentAnswer.state === "correct" && (
+                    <Badge className="bg-emerald-600">Correct +1</Badge>
+                  )}
+                  {currentAnswer.state === "partial" && (
+                    <Badge className="bg-amber-500">Almost +0.5</Badge>
+                  )}
+                  {currentAnswer.state === "incorrect" && (
+                    <Badge variant="destructive">Not quite +0</Badge>
+                  )}
+                  <span className="text-sm text-slate-600">You picked {ROLES[currentAnswer.pick as RoleKey].name}. Correct role: {ROLES[current.role].name}.</span>
+                </div>
+                <ul className="list-disc pl-6 text-sm space-y-1">
+                  {current.reasons.map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {current.dims.map((d) => (
+                    <Badge key={d} variant="outline">{d}</Badge>
+                  ))}
+                </div>
+                {current.alt && current.alt.length > 0 && (
+                  <p className="mt-3 text-xs text-slate-500">
+                    Near‑misses: {current.alt.map((a) => ROLES[a].name).join(", ")} can resemble this scenario depending on context.
+                  </p>
+                )}
+              </motion.div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Final analysis */}
+        <Card className="shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Results & Reasoning</CardTitle>
+                <CardDescription className="text-slate-600">
+                  Review your performance by cluster, and expand to see the rationale per question.
+                </CardDescription>
+              </div>
+              <Button variant="secondary" onClick={() => setRevealAll((v) => !v)}>
+                <BarChart2 className="h-4 w-4 mr-2" /> {revealAll ? "Hide details" : "Show all explanations"}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {(["Thought", "People", "Action"] as const).map((cl) => (
+                <div key={cl} className="rounded-xl border p-3 bg-white">
+                  <div className="text-xs text-slate-500">{cl}</div>
+                  <div className="text-2xl font-semibold">{clusterCorrect[cl]}<span className="text-slate-400 text-base">/{clusterTotals[cl]}</span></div>
+                  <div className="text-xs text-slate-500 mt-1">Correct in this cluster</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl border divide-y">
+              {scenarios.map((s, i) => {
+                const a = answers[s.id];
+                const picked = a?.pick ? ROLES[a.pick].name : "—";
+                const status = a?.state || "unanswered";
+                const statusChip =
+                  status === "correct" ? (
+                    <Badge className="bg-emerald-600">Correct</Badge>
+                  ) : status === "partial" ? (
+                    <Badge className="bg-amber-500">Almost</Badge>
+                  ) : status === "incorrect" ? (
+                    <Badge variant="destructive">Wrong</Badge>
+                  ) : (
+                    <Badge variant="outline">Pending</Badge>
+                  );
+                return (
+                  <details key={s.id} open={revealAll} className="p-4">
+                    <summary className="flex items-center justify-between cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-500">Q{i + 1}</span>
+                        {statusChip}
+                      </div>
+                      <div className="text-sm font-medium">Correct: {ROLES[s.role].name} <span className="text-slate-400">•</span> You: {picked}</div>
+                    </summary>
+                    <div className="pt-3 space-y-2">
+                      <p className="text-sm text-slate-700">“{s.text}”</p>
+                      <ul className="list-disc pl-6 text-sm space-y-1">
+                        {s.reasons.map((r, idx) => (
+                          <li key={idx}>{r}</li>
+                        ))}
+                      </ul>
+                      <div className="flex flex-wrap gap-2">
+                        {s.dims.map((d) => (
+                          <Badge key={d} variant="outline">{d}</Badge>
+                        ))}
+                      </div>
+                      {s.alt && s.alt.length > 0 && (
+                        <p className="text-xs text-slate-500">Plausible alternatives: {s.alt.map((k) => ROLES[k].name).join(", ")}</p>
+                      )}
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+
+            {completed && (
+              <div className="rounded-xl border p-4 bg-white">
+                <div className="text-sm text-slate-600">Final score</div>
+                <div className="text-3xl font-semibold">{score.toFixed(1)} <span className="text-slate-400 text-xl">/ {total}</span></div>
+                <p className="text-sm text-slate-600 mt-2">
+                  Full credit for exact matches; half credit for near‑miss roles with overlapping behaviours.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <footer className="text-xs text-slate-500 text-center mt-4">
+          Tip: Each role lives in tension with others. Look for the <span className="font-medium">trade‑off</span> being paid to create value.
+        </footer>
+      </div>
+    </div>
+  );
+}
